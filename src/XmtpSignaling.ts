@@ -1,5 +1,6 @@
 import type { Dm, Signer } from "@xmtp/browser-sdk";
 import { Client, IdentifierKind } from "@xmtp/browser-sdk";
+import type { EncodedContent } from "@xmtp/wasm-bindings";
 import { SignalingCodec, SignalingContentType } from "./SignalingCodec";
 import type { SignalingCallback, SignalingMessage } from "./SignalingMessage";
 
@@ -106,8 +107,9 @@ export class XmtpSignaling {
           contentType.authorityId === SignalingContentType.authorityId &&
           contentType.typeId === SignalingContentType.typeId
         ) {
-          const content = decodedMessage.content as SignalingMessage;
-          this.onMessage?.(content, decodedMessage.senderInboxId);
+          const encoded = decodedMessage.content as EncodedContent;
+          const message = SignalingCodec.decode(encoded);
+          this.onMessage?.(message, decodedMessage.senderInboxId);
         }
       },
       onError: (error) => {
