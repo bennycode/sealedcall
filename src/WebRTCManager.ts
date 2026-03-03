@@ -165,6 +165,9 @@ export class WebRTCManager {
       case "hangup":
         this.hangUp(false);
         break;
+      case "mute-status":
+        this.callbacks.onRemoteMuteChange(msg.muted);
+        break;
     }
   }
 
@@ -230,6 +233,10 @@ export class WebRTCManager {
 
   isActive() {
     return this.pc !== null && this.pc.connectionState !== "closed";
+  }
+
+  sendMuteStatus(muted: boolean) {
+    void this.sendSignal({ type: "mute-status", muted }).catch(() => {});
   }
 
   getVideoSender(): RTCRtpSender | undefined {

@@ -49,6 +49,7 @@ function isSignalingMessage(value: unknown): value is SignalingMessage {
     type === "offer" ||
     type === "answer" ||
     type === "ice-candidate" ||
-    type === "hangup"
+    type === "hangup" ||
+    type === "mute-status"
   );
 }

@@ -7,7 +7,8 @@ export type SignalingMessage =
       readonly sdpMid: string | null;
       readonly sdpMLineIndex: number | null;
     }
-  | { readonly type: "hangup" };
+  | { readonly type: "hangup" }
+  | { readonly type: "mute-status"; readonly muted: boolean };
 
 export type SignalingCallback = (
   msg: SignalingMessage,
