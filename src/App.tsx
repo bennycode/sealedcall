@@ -219,6 +219,22 @@ export default function App() {
     }
   }, [peerAddress]);
 
+  // Auto-connect flow when opened via partner invite link
+  useEffect(() => {
+    if (!peerAddress || walletAddress) return;
+    void connectEphemeral();
+  }, [peerAddress, walletAddress, connectEphemeral]);
+
+  useEffect(() => {
+    if (!peerAddress || !xmtpConnected || cameraActive) return;
+    void startCamera();
+  }, [peerAddress, xmtpConnected, cameraActive, startCamera]);
+
+  useEffect(() => {
+    if (!peerAddress || !cameraActive || connectionState !== "idle") return;
+    void callPeer();
+  }, [peerAddress, cameraActive, connectionState, callPeer]);
+
   return (
     <div className="app">
       {/* Header */}
