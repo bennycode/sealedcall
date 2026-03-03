@@ -25,6 +25,11 @@ export default function App() {
   const [cameraActive, setCameraActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+
+  const requestFullscreen = useCallback((ref: React.RefObject<HTMLVideoElement | null>) => {
+    ref.current?.requestFullscreen();
+  }, []);
 
   const [logs, setLogs] = useState<readonly LogEntry[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -159,6 +164,55 @@ export default function App() {
     log(shouldHide ? "Camera off" : "Camera on");
   }, [isVideoOff, log]);
 
+  const toggleScreenShare = useCallback(async () => {
+    if (isScreenSharing) {
+      // Revert to camera
+      const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+      if (cameraTrack) {
+        const sender = rtcRef.current?.getVideoSender();
+        await sender?.replaceTrack(cameraTrack);
+        if (localVideoRef.current && localStreamRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        }
+      }
+      setIsScreenSharing(false);
+      log("Screen sharing stopped");
+      return;
+    }
+
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (!screenTrack) return;
+
+      const sender = rtcRef.current?.getVideoSender();
+      await sender?.replaceTrack(screenTrack ?? null);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = screenStream;
+      }
+
+      screenTrack.onended = () => {
+        // User stopped sharing via browser UI
+        const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+        if (cameraTrack) {
+          void sender?.replaceTrack(cameraTrack);
+          if (localVideoRef.current && localStreamRef.current) {
+            localVideoRef.current.srcObject = localStreamRef.current;
+          }
+        }
+        setIsScreenSharing(false);
+        log("Screen sharing stopped");
+      };
+
+      setIsScreenSharing(true);
+      log("Screen sharing started", "ok");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Screen share failed: ${message}`, "err");
+    }
+  }, [isScreenSharing, log]);
+
   useEffect(() => {
     if (rtcRef.current && peerAddress) {
       rtcRef.current.setPeerAddress(peerAddress);
@@ -201,6 +255,15 @@ export default function App() {
       <div className="videos">
         <div className="video-box">
           <video ref={localVideoRef} autoPlay muted playsInline />
+          <button
+            className="fullscreen-btn"
+            onClick={() => requestFullscreen(localVideoRef)}
+            title="Fullscreen"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
+            </svg>
+          </button>
           {!cameraActive && (
             <div className="placeholder">
               <svg
@@ -236,6 +299,15 @@ export default function App() {
 
         <div className="video-box">
           <video ref={remoteVideoRef} autoPlay playsInline />
+          <button
+            className="fullscreen-btn"
+            onClick={() => requestFullscreen(remoteVideoRef)}
+            title="Fullscreen"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
+            </svg>
+          </button>
           {connectionState !== "connected" && (
             <div className="placeholder">
               <svg
@@ -297,6 +369,9 @@ export default function App() {
             </button>
             <button className="btn" onClick={toggleVideo}>
               {isVideoOff ? "Show Video" : "Hide Video"}
+            </button>
+            <button className={`btn${isScreenSharing ? " active" : ""}`} onClick={toggleScreenShare}>
+              {isScreenSharing ? "Stop Sharing" : "Share Screen"}
             </button>
             {connectionState === "connected" ? (
               <button className="btn danger" onClick={hangUp}>

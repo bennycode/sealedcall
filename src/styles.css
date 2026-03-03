@@ -133,6 +133,34 @@ h1 {
   gap: 4px;
 }
 
+.fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  color: var(--dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.video-box:hover .fullscreen-btn {
+  opacity: 1;
+}
+
+.fullscreen-btn:hover {
+  color: var(--text);
+}
+
 .placeholder {
   position: absolute;
   inset: 0;
@@ -202,6 +230,12 @@ h1 {
 .btn.primary:disabled {
   background: #a5b4fc;
   border-color: #a5b4fc;
+}
+
+.btn.active {
+  background: #eef2ff;
+  color: var(--primary);
+  border-color: #c7d2fe;
 }
 
 .btn.danger {

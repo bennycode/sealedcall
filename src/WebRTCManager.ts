@@ -231,4 +231,8 @@ export class WebRTCManager {
   isActive() {
     return this.pc !== null && this.pc.connectionState !== "closed";
   }
+
+  getVideoSender(): RTCRtpSender | undefined {
+    return this.pc?.getSenders().find((s) => s.track?.kind === "video");
+  }
 }
