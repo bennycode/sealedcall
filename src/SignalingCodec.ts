@@ -12,8 +12,8 @@ export const SignalingContentType: ContentTypeId = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export const SignalingCodec: ContentCodec<SignalingMessage> = {
-  contentType: SignalingContentType,
+export class SignalingCodec implements ContentCodec<SignalingMessage> {
+  readonly contentType = SignalingContentType;
 
   encode(content: SignalingMessage): EncodedContent {
     return {
@@ -21,7 +21,7 @@ export const SignalingCodec: ContentCodec<SignalingMessage> = {
       parameters: {},
       content: encoder.encode(JSON.stringify(content)),
     };
-  },
+  }
 
   decode(content: EncodedContent): SignalingMessage {
     const json: unknown = JSON.parse(decoder.decode(content.content));
@@ -29,14 +29,16 @@ export const SignalingCodec: ContentCodec<SignalingMessage> = {
       throw new Error("Invalid signaling message payload");
     }
     return json;
-  },
+  }
 
   fallback(content: SignalingMessage): string {
     return `[WebRTC signaling: ${content.type}]`;
-  },
+  }
 
-  shouldPush: () => false,
-};
+  shouldPush(): boolean {
+    return false;
+  }
+}
 
 function isSignalingMessage(value: unknown): value is SignalingMessage {
   if (typeof value !== "object" || value === null || !("type" in value)) {

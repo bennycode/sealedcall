@@ -3,6 +3,8 @@ import { Client, IdentifierKind } from "@xmtp/browser-sdk";
 import { SignalingCodec } from "./SignalingCodec";
 import type { SignalingCallback, SignalingMessage } from "./SignalingMessage";
 
+const signalingCodec = new SignalingCodec();
+
 export class XmtpSignaling {
   private client: Client | null = null;
   private onMessage: SignalingCallback | null = null;
@@ -17,7 +19,7 @@ export class XmtpSignaling {
     // reads it before init() posts to the worker, and structured clone skips it.
     const options = { env } as Record<string, unknown>;
     Object.defineProperty(options, "codecs", {
-      value: [SignalingCodec],
+      value: [signalingCodec],
       enumerable: false,
     });
     const client = await Client.create(signer, options);
@@ -61,7 +63,7 @@ export class XmtpSignaling {
   async sendSignal(peerInboxId: string, message: SignalingMessage) {
     if (!this.client) throw new Error("XMTP client not connected");
     const dm = await this.getOrCreateDm(peerInboxId);
-    await dm.send(SignalingCodec.encode(message));
+    await dm.send(signalingCodec.encode(message));
   }
 
   async sendSignalByAddress(peerAddress: string, message: SignalingMessage) {
@@ -69,7 +71,7 @@ export class XmtpSignaling {
 
     const cached = this.dmCache.get(peerAddress);
     if (cached) {
-      await cached.send(SignalingCodec.encode(message));
+      await cached.send(signalingCodec.encode(message));
       return;
     }
 
@@ -94,7 +96,7 @@ export class XmtpSignaling {
 
     const dm = await this.getOrCreateDm(inboxId);
     this.dmCache.set(peerAddress, dm);
-    await dm.send(SignalingCodec.encode(message));
+    await dm.send(signalingCodec.encode(message));
   }
 
   async startListening(callback: SignalingCallback) {
