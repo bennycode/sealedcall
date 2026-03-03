@@ -66,6 +66,7 @@ export class WebRTCManager {
           this.callbacks.onConnectionStateChange("connected");
           break;
         case "failed":
+          this.logConnectionDetails(pc);
           this.callbacks.onConnectionStateChange("failed");
           break;
         case "disconnected":
@@ -233,6 +234,26 @@ export class WebRTCManager {
 
   isActive() {
     return this.pc !== null && this.pc.connectionState !== "closed";
+  }
+
+  private logConnectionDetails(pc: RTCPeerConnection) {
+    this.callbacks.onLog(`ICE: ${pc.iceConnectionState}, gathering: ${pc.iceGatheringState}`, "err");
+    this.callbacks.onLog(`Signaling: ${pc.signalingState}`, "err");
+
+    const local = pc.localDescription;
+    const remote = pc.remoteDescription;
+    this.callbacks.onLog(`Local SDP: ${local ? local.type : "none"}, Remote SDP: ${remote ? remote.type : "none"}`, "err");
+
+    pc.getStats().then((stats) => {
+      for (const report of stats.values()) {
+        if (report.type === "candidate-pair" && report.state === "failed") {
+          this.callbacks.onLog(`Failed pair: ${report.localCandidateId} <-> ${report.remoteCandidateId}`, "err");
+        }
+        if (report.type === "local-candidate" || report.type === "remote-candidate") {
+          this.callbacks.onLog(`${report.type}: ${report.candidateType} ${report.address ?? ""}:${report.port ?? ""} ${report.protocol ?? ""}`, "err");
+        }
+      }
+    }).catch(() => {});
   }
 
   sendMuteStatus(muted: boolean) {
