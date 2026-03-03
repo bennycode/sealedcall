@@ -396,11 +396,10 @@ h1 {
 /* ── Build Info ────────────────────────────────────────────────── */
 
 .build-info {
-  position: fixed;
-  bottom: 8px;
-  left: 12px;
+  text-align: center;
   font-size: 11px;
   color: var(--dim);
+  margin-top: 20px;
   opacity: 0.5;
 }
 

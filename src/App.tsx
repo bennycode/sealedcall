@@ -142,8 +142,6 @@ export default function App() {
 
   const hangUp = useCallback(() => {
     rtcRef.current?.hangUp();
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    setConnectionState("idle");
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -215,6 +213,13 @@ export default function App() {
     }
   }, [isScreenSharing, log]);
 
+  // Clean up remote video when call ends (from either side)
+  useEffect(() => {
+    if (connectionState === "idle" && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+  }, [connectionState]);
+
   useEffect(() => {
     if (rtcRef.current && peerAddress) {
       rtcRef.current.setPeerAddress(peerAddress);
@@ -222,18 +227,21 @@ export default function App() {
   }, [peerAddress]);
 
   // Auto-connect flow when opened via partner invite link
+  const autoConnectDone = useRef(false);
+
   useEffect(() => {
-    if (!peerAddress || walletAddress) return;
+    if (!peerAddress || walletAddress || autoConnectDone.current) return;
     void connectEphemeral();
   }, [peerAddress, walletAddress, connectEphemeral]);
 
   useEffect(() => {
-    if (!peerAddress || !xmtpConnected || cameraActive) return;
+    if (!peerAddress || !xmtpConnected || cameraActive || autoConnectDone.current) return;
     void startCamera();
   }, [peerAddress, xmtpConnected, cameraActive, startCamera]);
 
   useEffect(() => {
-    if (!peerAddress || !cameraActive || connectionState !== "idle") return;
+    if (!peerAddress || !cameraActive || connectionState !== "idle" || autoConnectDone.current) return;
+    autoConnectDone.current = true;
     void callPeer();
   }, [peerAddress, cameraActive, connectionState, callPeer]);
 

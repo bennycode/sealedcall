@@ -163,7 +163,7 @@ export class WebRTCManager {
         await this.handleIceCandidate(msg);
         break;
       case "hangup":
-        this.hangUp();
+        this.hangUp(false);
         break;
     }
   }
@@ -215,9 +215,9 @@ export class WebRTCManager {
     }
   }
 
-  hangUp() {
+  hangUp(notifyPeer = true) {
     if (this.pc) {
-      if (this.peerAddress) {
+      if (notifyPeer && this.peerAddress) {
         void this.sendSignal({ type: "hangup" }).catch(() => {});
       }
       this.pc.close();
