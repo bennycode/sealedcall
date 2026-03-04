@@ -3,6 +3,8 @@ import { Client, IdentifierKind } from "@xmtp/browser-sdk";
 import { SignalingCodec } from "./SignalingCodec";
 import type { SignalingCallback, SignalingMessage } from "./SignalingMessage";
 
+export type ChatCallback = (text: string, senderInboxId: string) => void;
+
 const signalingCodec = new SignalingCodec();
 
 export class XmtpSignaling {
@@ -66,6 +68,12 @@ export class XmtpSignaling {
     await dm.send(signalingCodec.encode(message));
   }
 
+  async sendChat(peerInboxId: string, text: string) {
+    if (!this.client) throw new Error("XMTP client not connected");
+    const dm = await this.getOrCreateDm(peerInboxId);
+    await dm.sendMarkdown(text);
+  }
+
   async sendSignalByAddress(peerAddress: string, message: SignalingMessage) {
     if (!this.client) throw new Error("XMTP client not connected");
 
@@ -99,7 +107,10 @@ export class XmtpSignaling {
     await dm.send(signalingCodec.encode(message));
   }
 
-  async startListening(callback: SignalingCallback) {
+  async startListening(
+    callback: SignalingCallback,
+    onChat?: ChatCallback,
+  ) {
     if (!this.client) throw new Error("XMTP client not connected");
 
     this.onMessage = callback;
@@ -112,8 +123,18 @@ export class XmtpSignaling {
       onValue: (decodedMessage) => {
         if (decodedMessage.senderInboxId === ownInboxId) return;
 
-        const content = decodedMessage.content as SignalingMessage | undefined;
-        if (content && typeof content === "object" && "type" in content) {
+        const content = decodedMessage.content as
+          | SignalingMessage
+          | string
+          | undefined;
+
+        if (typeof content === "string") {
+          onChat?.(content, decodedMessage.senderInboxId);
+        } else if (
+          content &&
+          typeof content === "object" &&
+          "type" in content
+        ) {
           this.onMessage?.(content, decodedMessage.senderInboxId);
         }
       },

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import Markdown from "markdown-to-jsx";
 import { Wallet } from "ethers";
 import { XmtpSignaling } from "./XmtpSignaling";
 import { createXmtpSigner } from "./createXmtpSigner";
@@ -37,6 +38,15 @@ export default function App() {
   const [logs, setLogs] = useState<readonly LogEntry[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  type ChatMessage = {
+    readonly sender: "you" | "peer";
+    readonly text: string;
+    readonly time: string;
+  };
+  const [chatMessages, setChatMessages] = useState<readonly ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatBoxRef = useRef<HTMLDivElement>(null);
+
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const signalingRef = useRef<XmtpSignaling | null>(null);
@@ -58,6 +68,10 @@ export default function App() {
     logBoxRef.current?.scrollTo(0, logBoxRef.current.scrollHeight);
   }, [logs]);
 
+  useEffect(() => {
+    chatBoxRef.current?.scrollTo(0, chatBoxRef.current.scrollHeight);
+  }, [chatMessages]);
+
   const connectWithSigner = useCallback(
     async (address: string, signMessage: (msg: string) => Promise<string>) => {
       try {
@@ -74,13 +88,30 @@ export default function App() {
         setXmtpConnected(true);
         log(`Ready — your ID: ${id.slice(0, 12)}...`, "ok");
 
-        await signaling.startListening((msg, senderInboxId) => {
-          log(`Incoming signal from ${senderInboxId.slice(0, 8)}...`, "ok");
-          if (rtcRef.current && !rtcRef.current.isActive()) {
-            rtcRef.current.setPeerAddress(senderInboxId);
-          }
-          rtcRef.current?.handleSignalingMessage(msg);
-        });
+        const timeStr = () =>
+          new Date().toLocaleTimeString("en", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+
+        await signaling.startListening(
+          (msg, senderInboxId) => {
+            log(`Incoming signal from ${senderInboxId.slice(0, 8)}...`, "ok");
+            if (rtcRef.current && !rtcRef.current.isActive()) {
+              rtcRef.current.setPeerAddress(senderInboxId);
+            }
+            rtcRef.current?.handleSignalingMessage(msg);
+          },
+          (text, senderInboxId) => {
+            setPeerAddress((prev) => prev || senderInboxId);
+            setChatMessages((prev) => [
+              ...prev,
+              { sender: "peer", text, time: timeStr() },
+            ]);
+          },
+        );
         log("Ready for calls", "ok");
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -129,6 +160,25 @@ export default function App() {
       log(`Camera failed: ${message}`, "err");
     }
   }, [log]);
+
+  const sendChat = useCallback(async () => {
+    const text = chatInput.trim();
+    if (!text || !peerAddress || !signalingRef.current) return;
+    try {
+      await signalingRef.current.sendChat(peerAddress, text);
+      const time = new Date().toLocaleTimeString("en", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      setChatMessages((prev) => [...prev, { sender: "you", text, time }]);
+      setChatInput("");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Chat failed: ${message}`, "err");
+    }
+  }, [chatInput, peerAddress, log]);
 
   const callPeer = useCallback(async () => {
     if (!peerAddress || !rtcRef.current) return;
@@ -460,8 +510,55 @@ export default function App() {
         </div>
       )}
 
+      {/* Chat */}
+      {walletAddress && <div className="log-box chat-box">
+          <div className="log-header">
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+            Chat
+          </div>
+          <div className="log-content" ref={chatBoxRef}>
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`chat-msg ${msg.sender}`}>
+                <span className="log-time">{msg.time}</span>
+                <span className="chat-sender">{msg.sender === "you" ? "You" : "Peer"}</span>
+                <span className="chat-text"><Markdown>{msg.text}</Markdown></span>
+              </div>
+            ))}
+            {chatMessages.length === 0 && (
+              <div className="log-entry">
+                <span className="log-time">--:--:--</span>
+                <span className="log-msg">No messages yet</span>
+              </div>
+            )}
+          </div>
+          <div className="chat-input">
+            <input
+              className="input"
+              type="text"
+              placeholder="Type a message..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void sendChat();
+              }}
+            />
+            <button className="btn primary" onClick={sendChat} disabled={!chatInput.trim() || !peerAddress || !xmtpConnected}>
+              Send
+            </button>
+          </div>
+      </div>}
+
       {/* Activity */}
-      <div className="log-box">
+      {walletAddress && <div className="log-box">
         <div className="log-header">
           <svg
             width="14"
@@ -491,7 +588,7 @@ export default function App() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       <footer className="build-info">Build {__COMMIT_HASH__}</footer>
     </div>

@@ -2,6 +2,7 @@
   "dependencies": {
     "@xmtp/browser-sdk": "^6.4.0",
     "ethers": "^6.16.0",
+    "markdown-to-jsx": "^9.7.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
