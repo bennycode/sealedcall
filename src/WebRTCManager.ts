@@ -3,6 +3,14 @@ import type { SignalingMessage } from "./SignalingMessage";
 import type { LogLevel } from "./LogLevel";
 import type { WebRTCCallbacks } from "./ConnectionState";
 import { ICE_SERVERS } from "./RTCConfiguration";
+import {
+  isE2ESupported,
+  generateEncryptionKey,
+  exportKey,
+  importKey,
+  applySenderTransforms,
+  applyReceiverTransform,
+} from "./E2EEncryption";
 
 export class WebRTCManager {
   private pc: RTCPeerConnection | null = null;
@@ -11,6 +19,7 @@ export class WebRTCManager {
   private readonly callbacks: WebRTCCallbacks;
   private localStream: MediaStream | null = null;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private encryptionKeyBase64: string | null = null;
 
   constructor(signaling: XmtpSignaling, callbacks: WebRTCCallbacks) {
     this.signaling = signaling;
@@ -77,6 +86,9 @@ export class WebRTCManager {
 
     pc.ontrack = (event) => {
       this.callbacks.onLog("Remote media track received", "ok");
+      if (this.encryptionKeyBase64) {
+        applyReceiverTransform(event.receiver, this.encryptionKeyBase64);
+      }
       const [stream] = event.streams;
       if (stream) {
         this.callbacks.onRemoteStream(stream);
@@ -143,7 +155,27 @@ export class WebRTCManager {
     this.callbacks.onLog("Creating offer...");
     this.callbacks.onConnectionStateChange("connecting");
 
+    if (isE2ESupported()) {
+      const key = await generateEncryptionKey();
+      this.encryptionKeyBase64 = await exportKey(key);
+      await this.sendSignal({
+        type: "media-stream-encryption-key",
+        key: this.encryptionKeyBase64,
+      });
+      this.callbacks.onLog("E2E media encryption enabled", "ok");
+    } else {
+      this.callbacks.onLog(
+        "E2E media encryption not supported by this browser",
+        "warn",
+      );
+    }
+
     const pc = this.createPeerConnection();
+
+    if (this.encryptionKeyBase64) {
+      applySenderTransforms(pc, this.encryptionKeyBase64);
+    }
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -169,6 +201,9 @@ export class WebRTCManager {
       case "mute-status":
         this.callbacks.onRemoteMuteChange(msg.muted);
         break;
+      case "media-stream-encryption-key":
+        void this.handleEncryptionKey(msg.key);
+        break;
     }
   }
 
@@ -176,7 +211,16 @@ export class WebRTCManager {
     this.callbacks.onLog("Incoming call", "ok");
     this.callbacks.onConnectionStateChange("connecting");
 
+    if (this.encryptionKeyBase64) {
+      this.callbacks.onLog("E2E media encryption enabled", "ok");
+    }
+
     const pc = this.createPeerConnection();
+
+    if (this.encryptionKeyBase64) {
+      applySenderTransforms(pc, this.encryptionKeyBase64);
+    }
+
     await pc.setRemoteDescription(
       new RTCSessionDescription({ type: "offer", sdp }),
     );
@@ -219,6 +263,16 @@ export class WebRTCManager {
     }
   }
 
+  private async handleEncryptionKey(keyBase64: string) {
+    try {
+      await importKey(keyBase64);
+      this.encryptionKeyBase64 = keyBase64;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.callbacks.onLog(`E2E key import failed: ${message}`, "err");
+    }
+  }
+
   hangUp(notifyPeer = true) {
     if (this.pc) {
       if (notifyPeer && this.peerAddress) {
@@ -228,6 +282,7 @@ export class WebRTCManager {
       this.pc = null;
     }
     this.pendingCandidates = [];
+    this.encryptionKeyBase64 = null;
     this.callbacks.onConnectionStateChange("idle");
     this.callbacks.onLog("Call ended", "warn");
   }

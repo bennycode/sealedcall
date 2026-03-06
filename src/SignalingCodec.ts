@@ -50,6 +50,7 @@ function isSignalingMessage(value: unknown): value is SignalingMessage {
     type === "answer" ||
     type === "ice-candidate" ||
     type === "hangup" ||
-    type === "mute-status"
+    type === "mute-status" ||
+    type === "media-stream-encryption-key"
   );
 }
