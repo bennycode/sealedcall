@@ -159,6 +159,9 @@ export default function App() {
 
       // Replay signals that arrived before the WebRTCManager was ready
       const pending = pendingSignalsRef.current.splice(0);
+      if (pending.length > 0) {
+        autoConnectDone.current = true;
+      }
       for (const { msg, senderInboxId } of pending) {
         log(`Replaying signal from ${senderInboxId.slice(0, 8)}...`);
         if (!rtc.isActive()) {
