@@ -55,6 +55,18 @@ npm run dev
 - **Hide Video / Show Video** — toggle your camera for audio-only mode
 - **End Call** — hang up
 
+## Call Flow
+
+1. User clicks **Start Call**
+2. An ephemeral Ethereum wallet is created and used to connect an XMTP client
+3. The invite link contains the user's XMTP inbox ID as a `?partner=` query parameter
+4. The caller generates an AES-128-GCM key and sends it to the peer over XMTP
+5. The caller creates a WebRTC offer ([SDP](https://developer.mozilla.org/en-US/docs/Web/API/RTCSessionDescription/sdp)) and sends it over XMTP
+6. The answerer receives the encryption key and offer, sets up matching encryption transforms, and sends an answer back over XMTP
+7. ICE candidates are exchanged via XMTP until a direct peer connection is established
+8. Audio/video frames flow peer-to-peer, encrypted at three layers (MLS, DTLS-SRTP, AES-128-GCM Encoded Transform)
+9. Chat messages are sent separately through XMTP's messaging service
+
 ## Project Structure
 
 ```
