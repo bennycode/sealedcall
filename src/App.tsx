@@ -6,6 +6,7 @@ import { createXmtpSigner } from "./createXmtpSigner";
 import { WebRTCManager } from "./WebRTCManager";
 import type { ConnectionState } from "./ConnectionState";
 import type { LogLevel } from "./LogLevel";
+import type { SignalingMessage } from "./SignalingMessage";
 
 declare const __COMMIT_HASH__: string;
 
@@ -31,6 +32,7 @@ export default function App() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const canScreenShare = typeof navigator.mediaDevices?.getDisplayMedia === "function";
   const [isRemoteMuted, setIsRemoteMuted] = useState(false);
+  const [isRemoteVideoOff, setIsRemoteVideoOff] = useState(false);
 
   const requestFullscreen = useCallback((ref: React.RefObject<HTMLVideoElement | null>) => {
     ref.current?.requestFullscreen();
@@ -52,6 +54,7 @@ export default function App() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const signalingRef = useRef<XmtpSignaling | null>(null);
   const rtcRef = useRef<WebRTCManager | null>(null);
+  const pendingSignalsRef = useRef<{ msg: SignalingMessage; senderInboxId: string }[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
   const logBoxRef = useRef<HTMLDivElement>(null);
 
@@ -100,10 +103,14 @@ export default function App() {
         await signaling.startListening(
           (msg, senderInboxId) => {
             log(`Incoming signal from ${senderInboxId.slice(0, 8)}...`, "ok");
-            if (rtcRef.current && !rtcRef.current.isActive()) {
+            if (!rtcRef.current) {
+              pendingSignalsRef.current.push({ msg, senderInboxId });
+              return;
+            }
+            if (!rtcRef.current.isActive()) {
               rtcRef.current.setPeerAddress(senderInboxId);
             }
-            rtcRef.current?.handleSignalingMessage(msg);
+            rtcRef.current.handleSignalingMessage(msg);
           },
           (text, senderInboxId) => {
             setPeerAddress((prev) => prev || senderInboxId);
@@ -121,14 +128,6 @@ export default function App() {
     },
     [log],
   );
-
-  const connectEphemeral = useCallback(async () => {
-    log("Setting up...");
-    const wallet = Wallet.createRandom();
-    const { address } = wallet;
-    log("XMTP Account created", "ok");
-    await connectWithSigner(address, (msg) => wallet.signMessage(msg));
-  }, [connectWithSigner, log]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -152,15 +151,35 @@ export default function App() {
         },
         onConnectionStateChange: setConnectionState,
         onRemoteMuteChange: setIsRemoteMuted,
+        onRemoteVideoChange: setIsRemoteVideoOff,
         onLog: log,
       });
       rtc.setLocalStream(stream);
       rtcRef.current = rtc;
+
+      // Replay signals that arrived before the WebRTCManager was ready
+      const pending = pendingSignalsRef.current.splice(0);
+      for (const { msg, senderInboxId } of pending) {
+        log(`Replaying signal from ${senderInboxId.slice(0, 8)}...`);
+        if (!rtc.isActive()) {
+          rtc.setPeerAddress(senderInboxId);
+        }
+        await rtc.handleSignalingMessage(msg);
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       log(`Camera failed: ${message}`, "err");
     }
   }, [log]);
+
+  const connectEphemeral = useCallback(async () => {
+    log("Setting up...");
+    const wallet = Wallet.createRandom();
+    const { address } = wallet;
+    log("XMTP Account created", "ok");
+    await connectWithSigner(address, (msg) => wallet.signMessage(msg));
+    await startCamera();
+  }, [connectWithSigner, log, startCamera]);
 
   const sendChat = useCallback(async () => {
     const text = chatInput.trim();
@@ -215,6 +234,7 @@ export default function App() {
       track.enabled = !shouldHide;
     }
     setIsVideoOff(shouldHide);
+    rtcRef.current?.sendVideoStatus(shouldHide);
     log(shouldHide ? "Camera off" : "Camera on");
   }, [isVideoOff, log]);
 
@@ -274,6 +294,7 @@ export default function App() {
         remoteVideoRef.current.srcObject = null;
       }
       setIsRemoteMuted(false);
+      setIsRemoteVideoOff(false);
     }
   }, [connectionState]);
 
@@ -414,6 +435,15 @@ export default function App() {
               Muted
             </span>
           )}
+          {isRemoteVideoOff && connectionState === "connected" && (
+            <span className="mute-tag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              Video Off
+            </span>
+          )}
         </div>
       </div>
 
@@ -423,21 +453,7 @@ export default function App() {
           <button className="btn primary" onClick={connectEphemeral}>
             Start Call
           </button>
-        ) : !cameraActive ? (
-          <button className="btn primary" onClick={startCamera}>
-            <svg
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path d="m15.75 10.5 4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-            </svg>
-            Start Camera
-          </button>
-        ) : (
+        ) : !cameraActive ? null : (
           <>
             <button className="btn" onClick={toggleMute}>
               {isMuted ? "Unmute" : "Mute"}
@@ -479,7 +495,8 @@ export default function App() {
             <button
               className="btn primary"
               onClick={() => {
-                const url = new URL(window.location.href);
+                const base = import.meta.env.VITE_INVITE_BASE_URL || window.location.href;
+                const url = new URL(base);
                 url.searchParams.set("partner", inboxId);
                 void navigator.clipboard.writeText(url.toString());
                 setCopiedLink(true);

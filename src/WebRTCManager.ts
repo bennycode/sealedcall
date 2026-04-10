@@ -201,8 +201,11 @@ export class WebRTCManager {
       case "mute-status":
         this.callbacks.onRemoteMuteChange(msg.muted);
         break;
+      case "video-status":
+        this.callbacks.onRemoteVideoChange(msg.hidden);
+        break;
       case "media-stream-encryption-key":
-        void this.handleEncryptionKey(msg.key);
+        await this.handleEncryptionKey(msg.key);
         break;
     }
   }
@@ -313,6 +316,10 @@ export class WebRTCManager {
 
   sendMuteStatus(muted: boolean) {
     void this.sendSignal({ type: "mute-status", muted }).catch(() => {});
+  }
+
+  sendVideoStatus(hidden: boolean) {
+    void this.sendSignal({ type: "video-status", hidden }).catch(() => {});
   }
 
   getVideoSender(): RTCRtpSender | undefined {

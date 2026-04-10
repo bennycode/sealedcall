@@ -9,6 +9,7 @@ export type SignalingMessage =
     }
   | { readonly type: "hangup" }
   | { readonly type: "mute-status"; readonly muted: boolean }
+  | { readonly type: "video-status"; readonly hidden: boolean }
   | { readonly type: "media-stream-encryption-key"; readonly key: string };
 
 export type SignalingCallback = (
